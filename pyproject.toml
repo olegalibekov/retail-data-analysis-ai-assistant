@@ -1,0 +1,24 @@
+# Tooling configuration. Format and lint with:  ruff format . && ruff check .
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+src = ["src", "tests", "evals"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM"]
+ignore = [
+    "E501",  # long strings (prompts, messages to the model) are left to the formatter
+    "SIM905",  # a split string is the readable form for a word list
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["agent"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["E402", "B011"]
+"evals/run.py" = ["E402"]   # sys.path is set before the project imports
+"main.py" = ["E402"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "tests"]
+testpaths = ["tests"]

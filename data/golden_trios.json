@@ -1,0 +1,80 @@
+[
+  {
+    "id": "sample-001",
+    "provenance": "sample",
+    "question": "What was our monthly revenue over the last 12 months?",
+    "tags": ["revenue", "monthly", "trend", "time", "sales", "growth"],
+    "sql": "SELECT FORMAT_TIMESTAMP('%Y-%m', created_at) AS month,\n       ROUND(SUM(sale_price), 2) AS revenue,\n       COUNT(DISTINCT order_id) AS orders,\n       COUNT(DISTINCT user_id) AS customers\nFROM order_items\nWHERE status NOT IN ('Cancelled', 'Returned')\n  AND created_at >= TIMESTAMP(DATE_SUB(DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL 12 MONTH))\n  AND created_at < TIMESTAMP(DATE_TRUNC(CURRENT_DATE(), MONTH))\nGROUP BY month\nORDER BY month",
+    "report": "Revenue excludes cancelled and returned items and only complete months are shown, so the current month does not look like a drop. The analyst reported the trend with month-over-month change, named the strongest and weakest month, and checked whether growth came from more customers or from higher spend per customer."
+  },
+  {
+    "id": "sample-002",
+    "provenance": "sample",
+    "question": "Who are our top 10 customers by total spend?",
+    "tags": ["customers", "top", "spend", "best", "valuable", "ranking"],
+    "sql": "SELECT user_id,\n       COUNT(DISTINCT order_id) AS orders,\n       ROUND(SUM(sale_price), 2) AS total_spend,\n       ROUND(SUM(sale_price) / COUNT(DISTINCT order_id), 2) AS avg_order_value\nFROM order_items\nWHERE status NOT IN ('Cancelled', 'Returned')\nGROUP BY user_id\nORDER BY total_spend DESC\nLIMIT 10",
+    "report": "Customers are listed by user id only; names and contact details are never part of an analysis. The analyst added order count and average order value to show whether a top customer is a frequent buyer or made a few large purchases, and noted what share of total revenue the top 10 represent."
+  },
+  {
+    "id": "sample-003",
+    "provenance": "sample",
+    "question": "Why are customers in Texas underspending, and how do they compare with customers in California?",
+    "tags": ["state", "underspending", "compare", "region", "why", "customers", "spend"],
+    "sql": "SELECT u.state,\n       COUNT(DISTINCT oi.user_id) AS customers,\n       COUNT(DISTINCT oi.order_id) AS orders,\n       ROUND(SUM(oi.sale_price), 2) AS revenue,\n       ROUND(SUM(oi.sale_price) / COUNT(DISTINCT oi.user_id), 2) AS revenue_per_customer,\n       ROUND(COUNT(DISTINCT oi.order_id) / COUNT(DISTINCT oi.user_id), 2) AS orders_per_customer,\n       ROUND(COUNT(*) / COUNT(DISTINCT oi.order_id), 2) AS items_per_order,\n       ROUND(AVG(oi.sale_price), 2) AS avg_item_price\nFROM order_items AS oi\nJOIN users AS u ON u.id = oi.user_id\nWHERE oi.status NOT IN ('Cancelled', 'Returned')\n  AND u.state IN ('Texas', 'California')\nGROUP BY u.state",
+    "report": "'Underspending' was read as lower revenue per customer, not lower total revenue, because the states differ in size. Revenue per customer was split into orders per customer, items per order and average item price to find which driver differs. The analyst then ran one follow-up on the weakest driver (category mix and return rate by state) and separated what the data shows from possible explanations."
+  },
+  {
+    "id": "sample-004",
+    "provenance": "sample",
+    "question": "Why did our churn rate spike last month?",
+    "tags": ["churn", "retention", "spike", "lost", "inactive", "customers", "month"],
+    "sql": "WITH purchases AS (\n  SELECT DISTINCT user_id, DATE(created_at) AS purchase_date\n  FROM order_items\n  WHERE status NOT IN ('Cancelled', 'Returned')\n),\ngaps AS (\n  SELECT user_id, purchase_date,\n         LEAD(purchase_date) OVER (PARTITION BY user_id ORDER BY purchase_date) AS next_purchase_date\n  FROM purchases\n),\nchurn_events AS (\n  SELECT user_id, DATE_ADD(purchase_date, INTERVAL 90 DAY) AS churn_date\n  FROM gaps\n  WHERE (next_purchase_date IS NULL OR DATE_DIFF(next_purchase_date, purchase_date, DAY) > 90)\n    AND DATE_ADD(purchase_date, INTERVAL 90 DAY) < DATE_TRUNC(CURRENT_DATE(), MONTH)\n),\nmonths AS (\n  SELECT month_start\n  FROM UNNEST(GENERATE_DATE_ARRAY(DATE_SUB(DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL 6 MONTH), DATE_SUB(DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL 1 MONTH), INTERVAL 1 MONTH)) AS month_start\n),\nactive AS (\n  SELECT m.month_start, COUNT(DISTINCT p.user_id) AS active_customers\n  FROM months AS m\n  JOIN purchases AS p\n    ON p.purchase_date >= DATE_SUB(m.month_start, INTERVAL 90 DAY) AND p.purchase_date < m.month_start\n  GROUP BY m.month_start\n),\nchurned AS (\n  SELECT DATE_TRUNC(churn_date, MONTH) AS month_start, COUNT(DISTINCT user_id) AS churned_customers\n  FROM churn_events\n  GROUP BY month_start\n)\nSELECT m.month_start,\n       IFNULL(a.active_customers, 0) AS active_customers,\n       IFNULL(c.churned_customers, 0) AS churned_customers,\n       ROUND(SAFE_DIVIDE(IFNULL(c.churned_customers, 0), a.active_customers), 4) AS churn_rate\nFROM months AS m\nLEFT JOIN active AS a ON a.month_start = m.month_start\nLEFT JOIN churned AS c ON c.month_start = m.month_start\nORDER BY m.month_start",
+    "report": "Churn definition used: a customer churns when 90 days pass after a purchase without another purchase; monthly churn rate = customers who churned in the month divided by customers active (bought in the previous 90 days) at the start of the month. The analyst first confirmed the spike against the previous six months, then looked at who churned: a churn spike in month M usually reflects a large group that bought about 90 days earlier (for example a promotion or seasonal peak) and did not return. The follow-up split churned customers by acquisition month and traffic source."
+  },
+  {
+    "id": "sample-005",
+    "provenance": "sample",
+    "question": "Compare the performance of the Jeans and Sweaters categories. Why do they perform differently?",
+    "tags": ["product", "category", "compare", "performance", "brand", "margin", "returns", "why"],
+    "sql": "WITH items AS (\n  SELECT p.category, oi.user_id, oi.sale_price, p.cost, oi.status,\n         oi.status NOT IN ('Cancelled', 'Returned') AS sold\n  FROM order_items AS oi\n  JOIN products AS p ON p.id = oi.product_id\n  WHERE p.category IN ('Jeans', 'Sweaters')\n)\nSELECT category,\n       COUNTIF(sold) AS items_sold,\n       ROUND(SUM(IF(sold, sale_price, 0)), 2) AS revenue,\n       ROUND(AVG(IF(sold, sale_price, NULL)), 2) AS avg_item_price,\n       ROUND(SUM(IF(sold, sale_price - cost, 0)), 2) AS gross_margin,\n       ROUND(SAFE_DIVIDE(COUNTIF(status = 'Returned'), COUNTIF(status != 'Cancelled')), 4) AS return_rate,\n       COUNT(DISTINCT IF(sold, user_id, NULL)) AS customers\nFROM items\nGROUP BY category",
+    "report": "Performance was compared on volume (items sold, customers), price (average item price), profitability (gross margin = sale price minus cost) and quality (return rate), because revenue alone hides why two products differ. Items sold, customers, revenue, average item price and gross margin count sold items only (not cancelled or returned); return rate is returned items divided by all items that were not cancelled. The analyst named the driver with the largest relative gap and checked it with one follow-up, for example the monthly trend to test for seasonality, or the split by department."
+  },
+  {
+    "id": "sample-006",
+    "provenance": "sample",
+    "question": "Create a report for Q1 including insights and action items for Q2.",
+    "tags": ["report", "quarter", "quarterly", "summary", "insights", "action", "items", "kpi"],
+    "sql": "WITH items AS (\n  SELECT order_id, user_id, sale_price, status,\n         status NOT IN ('Cancelled', 'Returned') AS sold\n  FROM order_items\n  WHERE created_at >= TIMESTAMP(DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 1, 1))\n    AND created_at < TIMESTAMP(DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 4, 1))\n)\nSELECT COUNT(DISTINCT IF(sold, order_id, NULL)) AS orders,\n       COUNT(DISTINCT IF(sold, user_id, NULL)) AS customers,\n       ROUND(SUM(IF(sold, sale_price, 0)), 2) AS revenue,\n       ROUND(SAFE_DIVIDE(SUM(IF(sold, sale_price, 0)), COUNT(DISTINCT IF(sold, order_id, NULL))), 2) AS avg_order_value,\n       ROUND(SAFE_DIVIDE(COUNTIF(status = 'Returned'), COUNTIF(status != 'Cancelled')), 4) AS return_rate,\n       ROUND(SAFE_DIVIDE(COUNTIF(status = 'Cancelled'), COUNT(*)), 4) AS cancellation_rate\nFROM items",
+    "report": "Report structure used by the analysts: Summary (three sentences); Key metrics (revenue, orders, customers, average order value, return and cancellation rate, each compared with the previous quarter); Insights (monthly trend inside the quarter, best and worst categories by revenue and margin, where returns concentrate); Action items for the next quarter, each tied to one of the numbers. Populations: revenue, orders, customers and average order value count sold items only (not cancelled or returned), so an order or a customer with only cancelled or returned items is not counted and average order value is revenue divided by the orders shown; return rate is returned items divided by all items that were not cancelled; cancellation rate is cancelled items divided by all items. The KPI query was followed by one query by category and one by month. Q1 means January to March of the current year unless the user says otherwise."
+  },
+  {
+    "id": "sample-007",
+    "provenance": "sample",
+    "question": "Which traffic sources bring our most valuable customers?",
+    "tags": ["traffic", "source", "acquisition", "marketing", "channel", "valuable", "customers"],
+    "sql": "SELECT u.traffic_source,\n       COUNT(DISTINCT u.id) AS customers,\n       ROUND(SUM(oi.sale_price), 2) AS revenue,\n       ROUND(SUM(oi.sale_price) / COUNT(DISTINCT u.id), 2) AS revenue_per_customer,\n       ROUND(COUNT(DISTINCT oi.order_id) / COUNT(DISTINCT u.id), 2) AS orders_per_customer\nFROM users AS u\nJOIN order_items AS oi ON oi.user_id = u.id\nWHERE oi.status NOT IN ('Cancelled', 'Returned')\nGROUP BY u.traffic_source\nORDER BY revenue_per_customer DESC",
+    "report": "'Most valuable' was read as revenue per customer rather than total revenue, so a small but high-quality channel is not hidden by a large one. Both views were shown side by side. The analyst flagged that the data has no acquisition cost, so the result ranks channels by customer value, not by return on spend."
+  },
+  {
+    "id": "sample-008",
+    "provenance": "sample",
+    "question": "Which products have the highest return rate?",
+    "tags": ["returns", "return", "rate", "products", "quality", "refund", "brand", "category"],
+    "sql": "SELECT p.category,\n       p.brand,\n       COUNTIF(oi.status != 'Cancelled') AS items,\n       COUNTIF(oi.status = 'Returned') AS returned,\n       ROUND(SAFE_DIVIDE(COUNTIF(oi.status = 'Returned'), COUNTIF(oi.status != 'Cancelled')), 4) AS return_rate\nFROM order_items AS oi\nJOIN products AS p ON p.id = oi.product_id\nGROUP BY p.category, p.brand\nHAVING items >= 50\nORDER BY return_rate DESC\nLIMIT 20",
+    "report": "Return rate = returned items divided by all items that were not cancelled. A minimum of 50 items per group was required so that a product with two sales and one return does not top the list. Results were reported at category and brand level first, and the analyst compared each rate with the overall average to show how unusual it is."
+  },
+  {
+    "id": "sample-009",
+    "provenance": "sample",
+    "question": "How many customers are currently churned as of November 1, 2026?",
+    "tags": [
+      "churn",
+      "currently",
+      "snapshot",
+      "inactive",
+      "asof"
+    ],
+    "sql": "WITH last_purchase AS (\n  SELECT user_id, MAX(DATE(created_at)) AS last_purchase_date\n  FROM order_items\n  WHERE status NOT IN ('Cancelled', 'Returned')\n    AND created_at < TIMESTAMP('2026-11-01')\n  GROUP BY user_id\n)\nSELECT COUNT(*) AS churned_customers\nFROM last_purchase\nWHERE last_purchase_date <= DATE_SUB(DATE('2026-11-01'), INTERVAL 90 DAY)",
+    "report": "This is a current-inactivity snapshot as of the stated date, at UTC calendar-date granularity, within authorized brands. The default includes customers whose latest valid purchase date is at least 90 calendar days before the as-of date, including the threshold date. Customers who returned more recently are not currently churned, even if they had earlier churn events. Adapt the as-of date and inactivity window to the user request; do not reuse the example date blindly."
+  }
+]

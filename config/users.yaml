@@ -1,0 +1,19 @@
+# Demo identities. Access is based only on brands.
+# Scope values are exact products.brand values from the dataset.
+# Non-empty brand lists identify managers; only the CEO has unrestricted access.
+users:
+  alice:
+    name: Alice (Manager)
+    scope:
+      brand: ["Calvin Klein Jeans"]
+  bob:
+    name: Bob (Manager)
+    scope:
+      brand: ["Allegra K"]
+  carol:
+    name: Carol (Manager)
+    scope:
+      brand: ["Allegra K", "Calvin Klein Jeans"]
+  admin:
+    name: Dana (CEO)
+    scope: {}
