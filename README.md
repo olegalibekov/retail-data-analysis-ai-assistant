@@ -1,5 +1,10 @@
 # Retail Data Analysis Chat Assistant
 
+> ### Live demo
+> **<https://analysis-agent-466178123733.europe-west1.run.app>**
+>
+> Try the assistant in a browser, with nothing to install. The access code is provided separately.
+
 A chat agent that lets non-technical executives ask questions about sales, customers and products in plain language, discuss the answers, and save reports with action items. It queries the public BigQuery dataset `bigquery-public-data.thelook_ecommerce` with Gemini, and is built with LangGraph.
 
 This repository includes the application, architecture diagrams and technical documentation:
@@ -9,7 +14,6 @@ This repository includes the application, architecture diagrams and technical do
 | Architecture (HLD) with diagrams | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | Detailed technical explanation, one section per requirement | [docs/TECHNICAL_EXPLANATION.md](docs/TECHNICAL_EXPLANATION.md) |
 | Working prototype with a CLI | `src/agent/`, started with `python main.py` |
-| Live web demo of the same agent | <https://analysis-agent-466178123733.europe-west1.run.app> (access code provided separately) |
 
 The prototype implements safety and PII masking, confirmation of destructive operations, resilience, and observability. The production design covers additional capabilities, while the prototype includes optional sample golden examples in the prompt and a persona file that is re-read on every message.
 
@@ -102,9 +106,16 @@ At startup the assistant checks its setup. If the Gemini key or the BigQuery cre
 
 The same agent can be tried in a browser, without installing anything on the reviewer's side.
 
-**Live demo:** <https://analysis-agent-466178123733.europe-west1.run.app>. It asks for an access code, which is provided separately and is not kept in this repository. Enter the code, pick a demo user and ask a question; the user can be switched from the header at any time, which starts a clean session. The service sleeps when idle, so the first request can take a few seconds.
+### Live demo
 
-To run it locally:
+**<https://analysis-agent-466178123733.europe-west1.run.app>**
+
+- It asks for an access code, which is provided separately and is not kept in this repository.
+- Enter the code, pick a demo user and ask a question.
+- The user can be switched from the header at any time, which starts a clean session.
+- The service sleeps when idle, so the first request can take a few seconds.
+
+### Running it locally
 
 ```bash
 DEMO_ACCESS_CODE=choose-a-code uvicorn agent.interface.web:app --app-dir src --port 8080
