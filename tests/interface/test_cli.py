@@ -8,8 +8,8 @@ import pytest
 from rich.console import Console
 
 from agent.config import settings
-from agent.interface.cli import ChatApp, discard_typeahead
-from agent.observability import load_traces
+from agent.interface.cli import ChatApp, discard_typeahead, failure
+from agent.observability import Trace, load_traces
 from conftest import FakeBQ, FakeLLM, ai, tool_call
 
 
@@ -158,3 +158,34 @@ def test_trace_metrics_and_reports_views(cli):
     ):
         assert expected in text, expected
     assert app.command("/quit") is False
+
+
+def test_trace_of_another_user_cannot_be_looked_up(cli):
+    app, h, out = cli(FakeLLM(ai("ok")))
+    theirs = Trace("bob", "t9", "How is Brand B selling?", path=settings.trace_path).finish(answer="secret")
+    mine = app.ask("How is Brand A selling?")
+
+    app.command(f"/trace {theirs['trace_id']}")
+    assert "No such trace." in out.getvalue() and "Brand B" not in out.getvalue()  # same answer as for an unknown id
+
+    app.command(f"/trace {mine['trace_id'][:6]}")
+    assert "How is Brand A selling?" in out.getvalue()
+
+
+def test_failure_after_a_saved_report_says_what_was_saved(cli):
+    llm = FakeLLM(
+        ai("", tool_call("save_report", title="Q3 review", content="# Q3\nRevenue grew.")), RuntimeError("kaboom")
+    )
+    app, h, out = cli(llm)
+    record = app.ask("Create a report for Q3")
+
+    assert record["status"] == "error" and len(h.reports.find("alice")) == 1  # the report was stored before the crash
+    assert "Nothing was changed" not in record["answer"]
+    assert "Saved report #1" in record["answer"] and "Q3 review" in record["answer"]
+    assert "Check before you retry" in record["answer"]
+
+
+def test_failure_before_any_change_says_nothing_was_changed(cli):
+    app, h, out = cli(FakeLLM(RuntimeError("kaboom")))
+    assert app.ask("Revenue?")["answer"] == failure([])
+    assert failure([]).endswith("Nothing was changed. Please try again.")

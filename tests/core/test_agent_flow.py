@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from agent.config import settings
+from agent.config import User, settings
 from agent.core.llm import LLMUnavailable
 from agent.core.nodes import NO_ANSWER, REFUSAL, TOO_LONG, model_down, no_answer, with_changes
 from agent.core.state import text_of
@@ -236,6 +236,26 @@ def test_saved_report_belongs_to_user_and_conversation_and_is_scrubbed(make):
     report = h.reports.find("alice", thread_id="t1")[0]
     assert report.title == "Q1 report" and "[REDACTED EMAIL]" in report.body and "a@b.com" not in report.body
     assert h.reports.find("bob") == []
+
+
+def test_name_the_user_typed_is_not_repeated_in_the_answer(make):
+    h = make(FakeLLM(ai("Jane Doe is your top customer.")))
+    result = h.ask("Is Jane Doe our top customer?")
+    assert answer(result) == "[REDACTED NAME] is your top customer."
+    assert h.events("pii_redacted")[0]["where"] == "final_answer"
+
+
+def test_name_presented_as_a_customer_is_redacted_whatever_the_given_name(make):
+    h = make(FakeLLM(ai("Dmitry Ivanov is your top customer, ahead of customer Zoltan Kovacs.")))
+    assert answer(h.ask("Who is our top customer?")) == (
+        "[REDACTED NAME] is your top customer, ahead of customer [REDACTED NAME]."
+    )
+
+
+def test_brand_of_the_users_scope_is_never_taken_for_a_person(make):
+    owner = User("erin", "Erin", {"brand": ("Michael Kors",)})
+    h = make(FakeLLM(ai("Michael Kors is outside the data I could query today.")), user=owner)
+    assert answer(h.ask("How is it selling?")) == "Michael Kors is outside the data I could query today."
 
 
 def test_saved_report_keeps_a_brand_from_a_query_result_and_loses_an_invented_name(make):

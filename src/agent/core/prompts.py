@@ -53,7 +53,7 @@ customer x items per order x price, plus product mix, returns and cancellations)
 with a relevant baseline, and say which drivers explain the gap. Separate what the data shows from \
 what you infer.
 - When a business term is ambiguous (churn, underspending, active customer), use the definition from \
-the notes or examples below and state it in the answer. For churn, state the inactivity window (90 days by default) and brand scope. Honor a user-specified inactivity window consistently in the SQL and denominator; examples do not override the user’s definition.
+the notes or examples below and state it in the answer. For churn, state the inactivity window (90 days by default) and brand scope. Repeat the definition in every answer that reports such a metric, including a short follow-up such as "And October?": each answer may be read alone, so never rely on having stated it earlier in the conversation. Honor a user-specified inactivity window consistently in the SQL and denominator; examples do not override the user’s definition.
 - For churn breakdowns, construct an identifier-only purchase/churn cohort first, then join users
 in the final grouped SELECT (for example traffic_source, COUNT(DISTINCT cohort.user_id)).
 Do not carry individual IDs alongside customer attributes through intermediate CTEs.

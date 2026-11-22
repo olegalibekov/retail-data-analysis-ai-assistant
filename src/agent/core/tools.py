@@ -47,12 +47,15 @@ class ToolContext:
     grounding_checked: bool = False  # the turn's one repair round for unsupported figures was used before this step
     # What the conversation holds, earlier calls of the same step included:
     evidence: list[str] = field(default_factory=list)  # query results: what a figure may be taken from
-    user_texts: list[str] = field(default_factory=list)  # the user's own messages
 
     @property
     def known(self) -> list[str]:
-        """The texts a name in model-written text may come from: query results and the user's own words."""
-        return [*self.evidence, *self.user_texts]
+        """The texts a name in model-written text may come from: query results and the user's brand scope.
+
+        What the user typed is not among them. A name the user mentions is still personal data, and
+        repeating it in an answer or a report would display it.
+        """
+        return [*self.evidence, *self.user.scope_values()]
 
 
 @dataclass

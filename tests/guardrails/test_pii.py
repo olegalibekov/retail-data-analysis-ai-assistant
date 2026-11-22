@@ -380,3 +380,33 @@ def test_mask_dataframe_redacts_labelled_values_and_leaves_brands_named_after_pe
         "gift wrap",
     ]
     assert events == ["redacted 2 value(s) in column note"]
+
+
+def test_name_is_recognised_by_its_role_in_the_sentence_not_only_by_a_common_given_name():
+    assert scan_text("Dmitry Ivanov is your top customer.", known=()) == (
+        "[REDACTED NAME] is your top customer.",
+        ["name"],
+    )
+    assert scan_text("The top buyer, Zoltan Kovacs, spent most.", known=()) == (
+        "The top buyer, [REDACTED NAME], spent most.",
+        ["name"],
+    )
+    assert scan_text("customer named Aiko Tanaka", known=()) == ("customer named [REDACTED NAME]", ["name"])
+    # A brand from the data in the same position stays.
+    known = ["brand,revenue\nCalvin Klein,100\n"]
+    assert scan_text("Calvin Klein is the top brand; customer Calvin Klein fans buy more.", known=known)[1] == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Customer Lifetime Value rose in Q3.",
+        "## Customer Acquisition Trends",
+        "Outerwear & Coats is the top category for your customers.",
+        "The top customer is User 37775 with 3 orders.",
+        "New York is the largest market by customer count.",
+        "Key Metrics: revenue per customer and orders per customer.",
+    ],
+)
+def test_role_words_do_not_turn_business_terms_into_names(text):
+    assert scan_text(text, known=()) == (text, [])

@@ -77,6 +77,10 @@ class User:
     name: str
     scope: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
+    def scope_values(self) -> list[str]:
+        """The names in the user's scope (brands). They are business names, never personal data."""
+        return [value for values in self.scope.values() for value in values]
+
     def describe_scope(self) -> str:
         if not self.scope:
             return "all products"

@@ -216,7 +216,7 @@ The checks have limits: numeric matching is not a semantic proof, and the PII ev
 - A *status* per turn: ok, blocked, cancelled, degraded or error.
 - Result rows are never written to a trace. BigQuery jobs carry the trace id as a label, so a job can be matched to a turn and the reverse.
 
-**Deep dive.** Every answer ends with its trace id. `/trace` shows the last turn as a tree; `/trace <id>` shows any recorded turn. Reading it answers: what was asked, which examples were retrieved, what the model requested at each step, which SQL ran and what came back, where it retried, and what was blocked or redacted. The application log with stack traces is in `logs/agent.log`.
+**Deep dive.** Every answer ends with its trace id. `/trace` shows the last turn as a tree; `/trace <id>` shows any recorded turn of the same user; another user's trace id is answered like an unknown one, because traces hold questions and SQL. Reading it answers: what was asked, which examples were retrieved, what the model requested at each step, which SQL ran and what came back, where it retried, and what was blocked or redacted. The application log with stack traces is in `logs/agent.log`.
 
 **Agent-level metrics** (`/metrics`, computed from the traces):
 

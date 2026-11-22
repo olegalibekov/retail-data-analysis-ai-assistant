@@ -107,7 +107,10 @@ _GIVEN_NAMES = (
     "Ashley Kimberly Emily Donna Michelle Carol Amanda Dorothy Melissa Deborah Stephanie Rebecca Sharon Laura "
     "Cynthia Kathleen Amy Angela Shirley Anna Brenda Pamela Emma Nicole Helen Samantha Katherine Christine Debra "
     "Rachel Carolyn Janet Catherine Maria Diane Julie Joyce Evelyn Megan Andrea Hannah Jacqueline Martha Gloria "
-    "Teresa Sara Janice Julia Judy Alice Jane Olivia Sophia Natalie Lauren Christina Danielle Diana Theresa"
+    "Teresa Sara Janice Julia Judy Alice Jane Olivia Sophia Natalie Lauren Christina Danielle Diana Theresa "
+    "Dmitry Sergey Alexei Andrei Mikhail Vladimir Olga Natalia Tatiana Svetlana Ekaterina Anastasia "
+    "Mohammed Ahmed Omar Fatima Aisha Juan Carlos Luis Miguel Pedro Sofia Camila Giovanni Pierre Hans "
+    "Priya Rahul Amit Wei Hiroshi Yuki"
 ).split()
 _GIVEN_NAME = rf"(?:{'|'.join(_GIVEN_NAMES)})"
 
@@ -119,6 +122,19 @@ _TITLED_NAME = re.compile(rf"(?P<label>\b{_TITLE}){_NAME}")  # Mr. Smith, Dr. Pr
 # is one plain word, because it is tried at every capitalised word of a text and has to fail fast.
 _FULL_NAME = re.compile(
     rf"(?P<label>\b(?!{_GIVEN_NAME}\b){_CAPITALISED}\.? )?\b{_GIVEN_NAME} (?:{_GIVEN_NAME} )?{_NAME_PREFIX}{_NAME_WORD}"
+)
+
+
+# Two capitalised words that the sentence itself presents as a person, whatever the given name is:
+# "customer Dmitry Ivanov", "Dmitry Ivanov is your top customer". The role word is lower-case on
+# purpose: in a heading ("Customer Lifetime Value") the capitalised words are a term, not a name.
+_ROLE = "(?:customer|buyer|user|client|shopper)"
+# Only words that rank a person may stand between: "the largest market by customer count" is about a place.
+_RANK = r"(?:top|best|biggest|largest|leading|main|key|first|second|third|only|new|loyal|number one|most [\w-]+|highest[- ][\w-]+)"
+_TWO_NAME_WORDS = rf"(?!{_NOT_A_NAME}\b){_NAME_WORD} {_NAME_PREFIX}{_NAME_WORD}"
+_NAME_AFTER_ROLE = re.compile(rf"(?P<label>\b{_ROLE}(?: named| called)?,?[ :]+){_TWO_NAME_WORDS}")
+_NAME_BEFORE_ROLE = re.compile(
+    rf"\b{_TWO_NAME_WORDS}(?=,? (?:is|was|remains|became) (?:your|our|the|a|an) (?:{_RANK} ){{0,2}}{_ROLE}\b)"
 )
 
 
@@ -172,9 +188,11 @@ def scan_text(text: str, known: Iterable[str] | None = None) -> tuple[str, list[
     redacted wherever they occur. So is a name behind a title ("Mr. Smith"), unless a known text has it.
 
     A full name on its own ("Jane Doe") has the same shape as many brands, so it is judged by where it
-    comes from. `known` holds the texts a name may legitimately come from: query results and the user's
-    own messages. Personal data never leaves the warehouse, so a person-looking name in model-written
-    text that is in neither was invented or injected, and it is redacted. Brands named after people
+    comes from. `known` holds the texts a name may legitimately come from: query results and the brand
+    names of the user's scope. Personal data never leaves the warehouse, so a person-looking name in
+    model-written text that is in neither was invented, injected or typed by the user, and it is
+    redacted. A name is person-looking when it starts with a common given name, or when the sentence
+    presents it as a person ("customer Dmitry Ivanov", "Dmitry Ivanov is your top customer"). Brands named after people
     (Michael Kors, Jessica Simpson) come from query results and therefore stay, and so do brands with a
     title (Dr. Martens, Miss Me).
 
@@ -186,7 +204,7 @@ def scan_text(text: str, known: Iterable[str] | None = None) -> tuple[str, list[
         text, replacements = pattern.subn(partial(_redaction, kind), text)
         found.extend([kind] * replacements)
     sources = [] if known is None else [source.casefold() for source in known]
-    name_shapes = [_TITLED_NAME] if known is None else [_TITLED_NAME, _FULL_NAME]
+    name_shapes = [_TITLED_NAME] if known is None else [_TITLED_NAME, _FULL_NAME, _NAME_AFTER_ROLE, _NAME_BEFORE_ROLE]
     for shape in name_shapes:
         text, replacements = _redact_unsourced(shape, text, sources)
         found.extend(["name"] * replacements)

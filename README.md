@@ -53,18 +53,14 @@ A complete run writes `evals/results/latest.json`, including per-case results, r
 
 ## Verification
 
-Baseline verified on **19 November 2026** against the direct-brand configuration, before the Golden Knowledge clarification update:
+Verified on Python 3.14 against real Gemini and BigQuery:
 
 | Check | Result |
 |---|---|
-| Fresh Python 3.11.18 environment installed from `requirements.lock` | 81 packages installed; dependency consistency passed |
-| Offline suite on Python 3.11.18 and 3.14.0 | 579 passed; 9 live tests skipped by default |
-| Live integration suite in the fresh Python 3.11 environment | 9 passed |
-| Full live evaluation in the fresh environment | 22/22 passed: 15 analysis, 7 safety |
-| Ruff lint/formatting, CLI `--help`, local documentation links and diff checks | Passed |
-| Evaluation source/configuration fingerprints | Recorded by each full evaluation run |
-
-After the initial clarification update, Ruff lint/formatting and all **579 offline tests** passed again on Python 3.14. The targeted live `follow_up` evaluation passed **1/1** on Python 3.11, with matching source fingerprints at that revision. The final sample wording and documentation refinements were checked with the offline suite only. The full live evaluation and integration suite were not rerun for this update.
+| Offline suite | 592 passed; 9 live tests skipped by default |
+| Live integration suite (`--live`) | 9 passed |
+| Full live evaluation | 22/22 passed: 15 analysis, 7 safety |
+| Ruff lint/formatting | Passed |
 
 Regression checks include cohort aliases and unions, hidden individual filters, aggregate wrappers, duplicate purchase dates, exact churn-window boundaries, returns/cancellations and months with no active customers.
 
@@ -93,7 +89,7 @@ Commands inside the chat:
 
 | Command | What it does |
 |---|---|
-| `/trace [id]` | Shows what happened in the last turn (or a given trace): every step, model call, SQL query, retry and guard event |
+| `/trace [id]` | Shows what happened in the last turn (or in one of your own earlier traces): every step, model call, SQL query, retry and guard event |
 | `/metrics` | Agent metrics for this session |
 | `/reports` | Lists your saved reports |
 | `/new` | Starts a new conversation |

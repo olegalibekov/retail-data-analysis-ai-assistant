@@ -250,7 +250,7 @@ class Nodes:
     def tools(self, state: AgentState, runtime: Runtime[TurnContext]) -> dict:
         ctx = runtime.context
         messages = state["messages"]
-        evidence, texts = query_results(messages), user_texts(messages)
+        evidence = query_results(messages)
         failures, empties = state.get("sql_failures", 0), state.get("empty_results", 0)
         queries, scanned = state.get("sql_queries", 0), state.get("bytes_scanned", 0)
         # Every call of a step sees the repair round as it stood before the step, so two reports
@@ -280,7 +280,6 @@ class Nodes:
                         bytes_scanned=scanned,
                         grounding_checked=repair_used,
                         evidence=evidence,
-                        user_texts=texts,
                     ),
                 )
             failures = settings.max_sql_failures if result.stop_sql else failures + result.sql_failed
@@ -362,12 +361,14 @@ class Nodes:
     def output_guard(self, state: AgentState, runtime: Runtime[TurnContext]) -> dict:
         """Last PII check on the text the user will see.
 
-        A person's name may come from a query result (a brand named after its founder) or
-        from the user's own words. One that is in neither was made up, and it is redacted.
+        A person-looking name may come from a query result or from the user's brand scope (a
+        brand named after its founder). Any other is redacted, including one the user typed:
+        repeating it would display personal data, wherever it came from.
         """
         messages = state["messages"]
         last = messages[-1]
-        clean, found = scan_text(text_of(last), known=[*query_results(messages), *user_texts(messages)])
+        known = [*query_results(messages), *runtime.context.user.scope_values()]
+        clean, found = scan_text(text_of(last), known=known)
         if not found:
             return {}
         runtime.context.trace.event("pii_redacted", where="final_answer", detail=found)

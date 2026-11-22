@@ -22,7 +22,7 @@ from rich.markup import escape
 from agent.config import User, load_users, settings
 from agent.core.graph import build_graph
 from agent.core.llm import GeminiClient
-from agent.core.nodes import Nodes
+from agent.core.nodes import Nodes, with_changes
 from agent.core.state import TurnContext, new_turn, text_of
 from agent.core.tools import tool_schemas
 from agent.guardrails.pii import scan_text
@@ -34,7 +34,15 @@ from agent.warehouse.bq_client import BigQueryRunner
 
 log = logging.getLogger(__name__)
 
-FAILURE = "Something went wrong on my side and I couldn't complete that. Nothing was changed. Please try again."
+FAILURE = "Something went wrong on my side and I couldn't complete that."
+
+
+def failure(changes: list[str]) -> str:
+    """What the user reads after an unexpected failure, including what the turn did before it failed."""
+    message = with_changes(FAILURE, changes)
+    if changes:
+        return f"{message} Check before you retry, so that it is not done twice."
+    return f"{message} Please try again."
 
 
 class ChatApp:
@@ -78,7 +86,7 @@ class ChatApp:
         except Exception as e:  # the UI must survive anything
             log.exception("Turn %s failed", trace.trace_id)
             trace.mark("error")
-            error, answer = f"{type(e).__name__}: {e}"[:500], FAILURE
+            error, answer = f"{type(e).__name__}: {e}"[:500], failure(trace.changes)
         record = trace.finish(answer=answer, error=error)
         self.session.append(record)
         self._show_answer(record)
@@ -151,9 +159,10 @@ class ChatApp:
 
     def _show_trace(self, trace_id: str) -> None:
         if trace_id:
-            record = next(
-                (r for r in reversed(load_traces(settings.trace_path)) if r["trace_id"].startswith(trace_id)), None
-            )
+            # Traces hold questions and SQL, so a user may look up only their own. Another user's id
+            # gets the same answer as an unknown one, which does not reveal that it exists.
+            own = [r for r in load_traces(settings.trace_path) if r["user_id"] == self.user.id]
+            record = next((r for r in reversed(own) if r["trace_id"].startswith(trace_id)), None)
         else:
             record = self.session[-1] if self.session else None
         if record is None:
