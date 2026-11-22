@@ -18,6 +18,7 @@ known-first-party = ["agent"]
 "tests/**" = ["E402", "B011"]
 "evals/run.py" = ["E402"]   # sys.path is set before the project imports
 "main.py" = ["E402"]
+"src/agent/interface/web.py" = ["B008"]  # Depends() in defaults is how FastAPI declares dependencies
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "tests"]

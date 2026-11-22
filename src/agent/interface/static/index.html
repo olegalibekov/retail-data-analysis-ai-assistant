@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Retail data analysis assistant</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #1c2330; --muted: #667085; --line: #dfe3ea;
+    --accent: #0b6bcb; --accent-text: #ffffff; --user: #e8f1fb; --danger: #c0392b; --ok: #1e7f4f; --warn: #9a6700;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b; --card: #1b2029; --text: #e6e9ef; --muted: #98a2b3; --line: #2c3442;
+      --accent: #4c9bea; --accent-text: #0b1220; --user: #1f2c3d; --danger: #ef6b5b; --ok: #4cc38a; --warn: #e3b341;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; min-height: 100vh; }
+  header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; padding-bottom: 12px; }
+  h1 { font-size: 18px; margin: 0; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  #signin { max-width: 420px; margin: 8vh auto 0; display: grid; gap: 10px; }
+  label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+  input, select, textarea, button { font: inherit; color: inherit; }
+  input, select, textarea { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; width: 100%; }
+  button { border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
+  button.danger { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 600; }
+  button:disabled { opacity: .55; cursor: default; }
+  #log { flex: 1; display: flex; flex-direction: column; gap: 12px; padding: 4px 0 16px; }
+  .msg.user { align-self: flex-end; background: var(--user); max-width: 85%; white-space: pre-wrap; }
+  .msg.note { color: var(--muted); font-size: 13px; border-style: dashed; }
+  .msg :is(p, ul, ol, table, pre):first-child { margin-top: 0; } .msg :is(p, ul, ol, table, pre):last-child { margin-bottom: 0; }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; } th, td { border: 1px solid var(--line); padding: 4px 9px; text-align: left; }
+  pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 12.5px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; margin: 0; }
+  .foot { margin-top: 8px; color: var(--muted); font-size: 12.5px; }
+  .foot .degraded, .foot .blocked { color: var(--warn); } .foot .error { color: var(--danger); }
+  .receipt { color: var(--ok); font-size: 13.5px; margin-bottom: 8px; }
+  details.report { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin-bottom: 8px; }
+  details.report summary { cursor: pointer; font-weight: 600; }
+  .confirm h2 { font-size: 15px; margin: 0 0 8px; color: var(--danger); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  form#ask { display: flex; gap: 8px; position: sticky; bottom: 0; background: var(--bg); padding: 10px 0 14px; }
+  form#ask textarea { resize: none; height: 46px; }
+  .examples { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .examples button { font-size: 13px; padding: 5px 9px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div><h1>Retail data analysis assistant</h1><div class="muted" id="who">Demo</div></div>
+    <div class="row" id="tools" hidden>
+      <button data-view="reports">Reports</button>
+      <button data-view="trace">Trace</button>
+      <button data-view="metrics">Metrics</button>
+      <button id="new">New conversation</button>
+    </div>
+  </header>
+
+  <form id="signin" class="card">
+    <div>Ask questions about sales, customers and products in plain language. Each demo user sees only their own brands.</div>
+    <label>Access code <input id="code" type="password" autocomplete="off" required></label>
+    <label>Sign in as <select id="user"></select></label>
+    <button class="primary">Start</button>
+    <div class="muted" id="signin-error"></div>
+  </form>
+
+  <div id="log" hidden></div>
+  <form id="ask" hidden>
+    <textarea id="message" placeholder="Ask about revenue, customers, products… or: create a report for Q3" maxlength="4000" required></textarea>
+    <button class="primary" id="send">Send</button>
+  </form>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const log = $("log");
+let token = "";
+let busy = false;
+
+const EXAMPLES = [
+  "What data do you have, and what can I do with it?",
+  "What was our revenue by month over the last 6 months?",
+  "Who are our top 5 customers by total spend?",
+  "Create a report for Q3 2026 with insights and action items for Q4.",
+  "Delete all the reports we made in this conversation.",
+];
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function markdown(text) {
+  const box = el("div", "scroll");
+  box.innerHTML = DOMPurify.sanitize(marked.parse(text || ""));  // model text is never trusted as HTML
+  return box;
+}
+
+function add(node) { log.append(node); node.scrollIntoView({ behavior: "smooth", block: "end" }); return node; }
+function note(text) { return add(el("div", "card msg note", text)); }
+
+async function api(path, body) {
+  const options = { headers: { Authorization: "Bearer " + token } };
+  if (body !== undefined) {
+    options.method = "POST";
+    options.headers["Content-Type"] = "application/json";
+    options.body = JSON.stringify(body);
+  }
+  const response = await fetch(path, options);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "The request failed (" + response.status + ").");
+  return data;
+}
+
+function setBusy(value) {
+  busy = value;
+  $("send").disabled = value;
+  $("send").textContent = value ? "Working…" : "Send";
+}
+
+function showAnswer(result) {
+  const card = el("div", "card msg");
+  for (const report of result.reports || []) {
+    const details = el("details", "report");
+    details.open = true;
+    details.append(el("summary", "", "Report #" + report.id + " · " + report.title), markdown(report.body));
+    card.append(details);
+  }
+  for (const change of result.changes || []) card.append(el("div", "receipt", "✓ " + change));
+  card.append(markdown(result.answer));
+  const foot = el("div", "foot");
+  const queries = result.sql_queries === 1 ? "query" : "queries";
+  foot.append("trace " + result.trace_id + " · " + result.model_calls + " model call(s) · " + result.sql_queries + " " + queries + " · " + result.seconds + "s");
+  if (result.status !== "ok") { foot.append(" · "); foot.append(el("span", result.status, result.status)); }
+  card.append(foot);
+  add(card);
+}
+
+function showConfirmation(request) {
+  const card = el("div", "card msg confirm");
+  card.append(el("h2", "", "About to delete " + request.reports.length + " saved report(s) (" + request.criteria + ")"));
+  const table = el("table");
+  table.append(row(["ID", "Title", "Created (UTC)"], "th"));
+  for (const report of request.reports) table.append(row([report.id, report.title, report.created_at], "td"));
+  const scroll = el("div", "scroll"); scroll.append(table);
+  const buttons = el("div", "row"); buttons.style.marginTop = "10px";
+  const yes = el("button", "danger", "Delete " + request.reports.length + " report(s)");
+  const no = el("button", "", "Cancel");
+  const decide = async (confirmed) => {
+    yes.disabled = no.disabled = true;
+    await turn(() => api("/api/confirm", { confirmed }));
+  };
+  yes.onclick = () => decide(true);
+  no.onclick = () => decide(false);
+  buttons.append(yes, no);
+  card.append(scroll, buttons);
+  add(card);
+}
+
+function row(cells, tag) {
+  const tr = el("tr");
+  for (const cell of cells) tr.append(el(tag, "", String(cell)));
+  return tr;
+}
+
+async function turn(request) {
+  setBusy(true);
+  const waiting = note("Working… this can take up to a minute.");
+  try {
+    const result = await request();
+    if (result.confirmation) showConfirmation(result.confirmation); else showAnswer(result);
+  } catch (error) {
+    note(error.message);
+  } finally {
+    waiting.remove();
+    setBusy(false);
+  }
+}
+
+function ask(text) {
+  if (busy || !text.trim()) return;
+  add(el("div", "card msg user", text));
+  turn(() => api("/api/ask", { message: text }));
+}
+
+async function view(name) {
+  try {
+    if (name === "reports") {
+      const reports = await api("/api/reports");
+      if (!reports.length) return note("You have no saved reports.");
+      const table = el("table");
+      table.append(row(["ID", "Title", "Created (UTC)", "This conversation"], "th"));
+      for (const r of reports) table.append(row([r.id, r.title, r.created_at, r.this_conversation ? "yes" : ""], "td"));
+      const card = el("div", "card msg scroll"); card.append(table); add(card);
+    } else if (name === "trace") {
+      const card = el("div", "card msg"); card.append(el("pre", "", (await api("/api/trace")).text)); add(card);
+    } else {
+      const metrics = await api("/api/metrics");
+      const table = el("table");
+      for (const [key, value] of Object.entries(metrics)) table.append(row([key.replaceAll("_", " "), value ?? "–"], "td"));
+      const card = el("div", "card msg scroll"); card.append(table); add(card);
+    }
+  } catch (error) { note(error.message); }
+}
+
+$("signin").onsubmit = async (event) => {
+  event.preventDefault();
+  $("signin-error").textContent = "";
+  try {
+    const session = await api("/api/session", { code: $("code").value, user: $("user").value });
+    token = session.token;
+    $("who").textContent = "Signed in as " + session.name + " · data scope: " + session.scope;
+    for (const id of ["log", "ask", "tools"]) $(id).hidden = false;
+    $("signin").hidden = true;
+    const hello = el("div", "card msg");
+    hello.append(el("div", "", "Ask a question, or try one of these:"));
+    const examples = el("div", "examples");
+    for (const text of EXAMPLES) { const b = el("button", "", text); b.onclick = () => ask(text); examples.append(b); }
+    hello.append(examples); add(hello);
+    $("message").focus();
+  } catch (error) { $("signin-error").textContent = error.message; }
+};
+
+$("ask").onsubmit = (event) => { event.preventDefault(); const text = $("message").value; $("message").value = ""; ask(text); };
+$("message").onkeydown = (event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); $("ask").requestSubmit(); } };
+for (const button of document.querySelectorAll("[data-view]")) button.onclick = () => view(button.dataset.view);
+$("new").onclick = async () => { try { const r = await api("/api/new", {}); note("Started a new conversation (" + r.thread_id + ")."); } catch (error) { note(error.message); } };
+
+fetch("/api/users").then((r) => r.json()).then((users) => {
+  for (const user of users) { const option = el("option", "", user.name); option.value = user.id; $("user").append(option); }
+});
+</script>
+</body>
+</html>

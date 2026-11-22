@@ -97,6 +97,58 @@ Commands inside the chat:
 
 At startup the assistant checks its setup. If the Gemini key or the BigQuery credentials are missing, a "Setup needed" box says what is missing and how to fix it; saved reports and the commands still work meanwhile. While processing a question, the CLI shows an animated “Processing…” indicator and updates it for query, report and retry steps. Consoles without animation support show a plain “Processing…” line. Anything typed while the assistant is working on an answer is ignored, so stray keys do not become extra questions or answer a confirmation dialog.
 
+## Web demo
+
+The same agent can be tried in a browser, without installing anything on the reviewer's side:
+
+```bash
+DEMO_ACCESS_CODE=choose-a-code uvicorn agent.interface.web:app --app-dir src --port 8080
+```
+
+Open <http://localhost:8080>, enter the code and pick a demo user. The page offers the chat, the confirmation of deletions as a dialog with the full list, saved reports, the trace of the last turn and the session metrics. It uses the same graph, guardrails and stores as the CLI ([src/agent/interface/web.py](src/agent/interface/web.py)).
+
+A public address spends the owner's Gemini quota and BigQuery budget, so the demo is closed by default:
+
+- without `DEMO_ACCESS_CODE` nobody can sign in;
+- a session is limited to 40 questions and the whole service to 20 questions per minute;
+- conversations and sessions are kept in memory, so it must run as one instance.
+
+The demo users stand in for single sign-on, exactly as `--user` does in the CLI: the access code protects the service, not one demo user from another.
+
+### Deploying to Cloud Run
+
+The [Dockerfile](Dockerfile) builds the web demo. Cloud Run needs a project with billing enabled. Replace `PROJECT` and `PROJECT_NUMBER` and choose a region. `.gcloudignore` keeps `.env`, local databases and virtual environments out of the upload:
+
+```bash
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com secretmanager.googleapis.com --project PROJECT
+
+# In a new project the build account needs the standard builder role.
+gcloud projects add-iam-policy-binding PROJECT --member serviceAccount:PROJECT_NUMBER-compute@developer.gserviceaccount.com --role roles/cloudbuild.builds.builder
+
+# Identity of the service: it may run BigQuery jobs and nothing else. No key file is needed.
+gcloud iam service-accounts create analysis-agent --project PROJECT
+gcloud projects add-iam-policy-binding PROJECT --member serviceAccount:analysis-agent@PROJECT.iam.gserviceaccount.com --role roles/bigquery.jobUser
+
+# Secrets: paste each value when prompted, then press Ctrl-D.
+gcloud secrets create gemini-api-key --data-file=- --project PROJECT
+gcloud secrets create demo-access-code --data-file=- --project PROJECT
+for secret in gemini-api-key demo-access-code; do
+  gcloud secrets add-iam-policy-binding $secret --project PROJECT --member serviceAccount:analysis-agent@PROJECT.iam.gserviceaccount.com --role roles/secretmanager.secretAccessor
+done
+
+gcloud run deploy analysis-agent --source . --project PROJECT --region europe-west1 \
+  --service-account analysis-agent@PROJECT.iam.gserviceaccount.com \
+  --set-env-vars GCP_PROJECT_ID=PROJECT \
+  --set-secrets GOOGLE_API_KEY=gemini-api-key:latest,DEMO_ACCESS_CODE=demo-access-code:latest \
+  --max-instances 1 --memory 1Gi --timeout 300 --allow-unauthenticated
+```
+
+`--allow-unauthenticated` makes the page reachable; the access code is what admits a visitor. Saved reports and traces live in the container and are lost when it restarts, which is acceptable for a demo; the production design keeps them in Postgres.
+
+### Spending cap
+
+A Cloud Billing budget only notifies. To make it a hard limit, [deploy/billing_cap](deploy/billing_cap/main.py) holds a small Cloud Function that listens to the budget's notifications and detaches the project from its billing account once the reported cost exceeds the budget. That stops the demo until billing is linked again by hand. Budget notifications lag behind usage by hours, so the final bill can end slightly above the limit.
+
 ## Things to try
 
 | Type this | What it demonstrates |
@@ -174,6 +226,7 @@ src/agent/
   observability.py        per-turn traces and metrics
   interface/              the command line
     cli.py                chat loop, slash commands, confirmation dialog
+    web.py                the web demo: the same graph behind a small HTTP API and one page
     render.py             how things look: panels, tables and the trace tree
   core/                   the agent
     graph.py              the LangGraph state machine

@@ -12,3 +12,9 @@ service-account*.json
 
 # Working note written before the build; superseded by ARCHITECTURE.md and TECHNICAL_EXPLANATION.md
 docs/ANALYSIS.md
+.claude/
+
+# Local LangGraph Studio data and locally generated evaluation output
+.langgraph_api/
+.venv*/
+evals/results/
