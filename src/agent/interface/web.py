@@ -98,6 +98,21 @@ class Service:
                 self.sessions.popitem(last=False)  # the oldest session makes room
         return token, self.sessions[token]
 
+    def switch_user(self, token: str, user_id: str) -> tuple[str, Session]:
+        """Continue as another demo user: a fresh session, so nothing of the previous user carries over.
+
+        The visitor has already shown the access code, so it is not asked again. The old
+        session ends, and with it its conversation.
+        """
+        self.session(token)
+        if user_id not in self.users:
+            raise HTTPException(400, "Unknown user.")
+        fresh_token = secrets.token_urlsafe(24)
+        with self._guard:
+            self.sessions.pop(token, None)
+            self.sessions[fresh_token] = Session(self.users[user_id], uuid.uuid4().hex[:8])
+        return fresh_token, self.sessions[fresh_token]
+
     def session(self, token: str) -> Session:
         found = self.sessions.get(token)
         if found is None:
@@ -204,6 +219,10 @@ class SignIn(BaseModel):
     user: str = Field(max_length=50)
 
 
+class Switch(BaseModel):
+    user: str = Field(max_length=50)
+
+
 class Question(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
 
@@ -239,6 +258,11 @@ def create_app(service: Service | None = None) -> FastAPI:
     @app.post("/api/session")
     def sign_in(body: SignIn, svc: Service = Depends(shared)) -> dict:
         token, session = svc.open_session(body.code, body.user)
+        return {"token": token, "name": session.user.name, "scope": session.user.describe_scope()}
+
+    @app.post("/api/switch")
+    def switch(body: Switch, authorization: str = Header(default=""), svc: Service = Depends(shared)) -> dict:
+        token, session = svc.switch_user(authorization.removeprefix("Bearer ").strip(), body.user)
         return {"token": token, "name": session.user.name, "scope": session.user.describe_scope()}
 
     @app.post("/api/ask")

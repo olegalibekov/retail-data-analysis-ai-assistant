@@ -28,6 +28,7 @@
   label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
   input, select, textarea, button { font: inherit; color: inherit; }
   input, select, textarea { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; width: 100%; }
+  #tools select { width: auto; padding: 8px 10px; background: var(--card); cursor: pointer; }
   button { border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 8px 12px; cursor: pointer; }
   button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
   button.danger { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 600; }
@@ -62,6 +63,7 @@
       <button data-view="trace">Trace</button>
       <button data-view="metrics">Metrics</button>
       <button id="new">New conversation</button>
+      <select id="switch" title="Switch demo user" aria-label="Switch demo user"></select>
     </div>
   </header>
 
@@ -214,21 +216,34 @@ async function view(name) {
   } catch (error) { note(error.message); }
 }
 
+// Begin a session as one demo user: an empty chat, so nothing of the previous user stays on screen.
+function start(session, userId) {
+  token = session.token;
+  $("who").textContent = "Signed in as " + session.name + " · data scope: " + session.scope;
+  $("switch").value = userId;
+  log.replaceChildren();
+  const hello = el("div", "card msg");
+  hello.append(el("div", "", "Ask a question, or try one of these:"));
+  const examples = el("div", "examples");
+  for (const text of EXAMPLES) { const b = el("button", "", text); b.onclick = () => ask(text); examples.append(b); }
+  hello.append(examples); add(hello);
+  $("message").focus();
+}
+
+$("switch").onchange = async () => {
+  const userId = $("switch").value;
+  if (busy) return;
+  try { start(await api("/api/switch", { user: userId }), userId); } catch (error) { note(error.message); }
+};
+
 $("signin").onsubmit = async (event) => {
   event.preventDefault();
   $("signin-error").textContent = "";
   try {
     const session = await api("/api/session", { code: $("code").value, user: $("user").value });
-    token = session.token;
-    $("who").textContent = "Signed in as " + session.name + " · data scope: " + session.scope;
     for (const id of ["log", "ask", "tools"]) $(id).hidden = false;
     $("signin").hidden = true;
-    const hello = el("div", "card msg");
-    hello.append(el("div", "", "Ask a question, or try one of these:"));
-    const examples = el("div", "examples");
-    for (const text of EXAMPLES) { const b = el("button", "", text); b.onclick = () => ask(text); examples.append(b); }
-    hello.append(examples); add(hello);
-    $("message").focus();
+    start(session, $("user").value);
   } catch (error) { $("signin-error").textContent = error.message; }
 };
 
@@ -238,7 +253,9 @@ for (const button of document.querySelectorAll("[data-view]")) button.onclick = 
 $("new").onclick = async () => { try { const r = await api("/api/new", {}); note("Started a new conversation (" + r.thread_id + ")."); } catch (error) { note(error.message); } };
 
 fetch("/api/users").then((r) => r.json()).then((users) => {
-  for (const user of users) { const option = el("option", "", user.name); option.value = user.id; $("user").append(option); }
+  for (const select of [$("user"), $("switch")]) {
+    for (const user of users) { const option = el("option", "", user.name); option.value = user.id; select.append(option); }
+  }
 });
 </script>
 </body>

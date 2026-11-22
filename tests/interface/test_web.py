@@ -116,3 +116,24 @@ def test_turns_per_minute_are_limited_across_sessions(site, monkeypatch):
     client, _ = site(FakeLLM(ai("ok")))
     assert client.post("/api/ask", json={"message": "Q"}, headers=sign_in(client)).status_code == 200
     assert client.post("/api/ask", json={"message": "Q"}, headers=sign_in(client, user="bob")).status_code == 429
+
+
+def test_switching_user_starts_a_clean_session_without_asking_the_code_again(site):
+    client, h = site(FakeLLM(ai("ok")))
+    alice = sign_in(client)
+    h.reports.save("alice", "t1", "Alice's report", "…")
+    client.post("/api/ask", json={"message": "How is Brand A selling?"}, headers=alice)
+
+    switched = client.post("/api/switch", json={"user": "bob"}, headers=alice).json()
+    bob = {"Authorization": f"Bearer {switched['token']}"}
+    assert switched["name"] == "Bob (Manager)"
+    assert client.get("/api/reports", headers=bob).json() == []  # nothing of Alice's is visible
+    assert client.get("/api/metrics", headers=bob).json() == {"turns": 0}  # and her conversation is not his
+    assert client.get("/api/trace", headers=bob).status_code == 404
+    assert client.get("/api/reports", headers=alice).status_code == 401  # the old session has ended
+
+
+def test_switching_needs_a_session_and_a_known_user(site):
+    client, _ = site(FakeLLM(ai("ok")))
+    assert client.post("/api/switch", json={"user": "bob"}).status_code == 401
+    assert client.post("/api/switch", json={"user": "mallory"}, headers=sign_in(client)).status_code == 400
