@@ -9,6 +9,7 @@ This repository includes the application, architecture diagrams and technical do
 | Architecture (HLD) with diagrams | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | Detailed technical explanation, one section per requirement | [docs/TECHNICAL_EXPLANATION.md](docs/TECHNICAL_EXPLANATION.md) |
 | Working prototype with a CLI | `src/agent/`, started with `python main.py` |
+| Live web demo of the same agent | <https://analysis-agent-466178123733.europe-west1.run.app> (access code provided separately) |
 
 The prototype implements safety and PII masking, confirmation of destructive operations, resilience, and observability. The production design covers additional capabilities, while the prototype includes optional sample golden examples in the prompt and a persona file that is re-read on every message.
 
@@ -99,13 +100,17 @@ At startup the assistant checks its setup. If the Gemini key or the BigQuery cre
 
 ## Web demo
 
-The same agent can be tried in a browser, without installing anything on the reviewer's side:
+The same agent can be tried in a browser, without installing anything on the reviewer's side.
+
+**Live demo:** <https://analysis-agent-466178123733.europe-west1.run.app>. It asks for an access code, which is provided separately and is not kept in this repository. Enter the code, pick a demo user and ask a question; the user can be switched from the header at any time, which starts a clean session. The service sleeps when idle, so the first request can take a few seconds.
+
+To run it locally:
 
 ```bash
 DEMO_ACCESS_CODE=choose-a-code uvicorn agent.interface.web:app --app-dir src --port 8080
 ```
 
-Open <http://localhost:8080>, enter the code and pick a demo user. The page offers the chat, the confirmation of deletions as a dialog with the full list, saved reports, the trace of the last turn and the session metrics. It uses the same graph, guardrails and stores as the CLI ([src/agent/interface/web.py](src/agent/interface/web.py)).
+Open <http://localhost:8080>, enter the code and pick a demo user. The page offers the chat, a switch between demo users, the confirmation of deletions as a dialog with the full list, saved reports, the trace of the last turn and the session metrics. It uses the same graph, guardrails and stores as the CLI ([src/agent/interface/web.py](src/agent/interface/web.py)).
 
 A public address spends the owner's Gemini quota and BigQuery budget, so the demo is closed by default:
 
