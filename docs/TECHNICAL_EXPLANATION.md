@@ -172,7 +172,7 @@ In production the same `interrupt()` is shown as a confirmation card in the chat
 - **Empty results** get one guided retry (check filter values, case and date range). A second empty result is reported to the user as "nothing matched".
 - **Warehouse outage, timeout or permission error** is classified separately from a wrong query. Queries stop for this turn and the model is told not to guess numbers.
 - **Model failures**: a rate limit or overload gets up to two retries with backoff, using the delay the server asks for when it gives one; then the fallback model; then a plain message. A wait longer than 20 seconds is not taken, and a call that timed out (60 seconds) is not repeated on the same model; in both cases the fallback model is tried instead.
-- **Cost stays bounded**: at most eight model calls per question, the last one with tools disabled so it must answer; one gigabyte maximum bytes billed per query, enforced by BigQuery; 200 rows returned; a 60-second job timeout.
+- **Cost stays bounded**: at most ten model calls per question, the last one with tools disabled so it must answer; one gigabyte maximum bytes billed per query, enforced by BigQuery; 200 rows returned; a 60-second job timeout.
 - **Missing setup is not treated as an outage.** Missing BigQuery credentials are detected once at startup, shown in a "Setup needed" box with the fix, and remembered, so later questions fail in milliseconds with an honest explanation ("the data source has not been set up yet") instead of a slow "try again later".
 - **Stray input costs nothing.** Lines typed while a turn is running are discarded on a terminal. Without this, each of them became a further question with its own model calls.
 - **Derived figures must come from data.** A percentage or explicit customer/order/item count in a final answer, or in a report about to be saved, that does not occur in any query result of the conversation (exactly for counts; as written or as a fraction for percentages) is sent back to the model once with the instruction to compute it in SQL or leave it out (`src/agent/guardrails/grounding.py`). The rejected draft is not kept in the conversation, and the incident is a trace event. This was added after a live session in which the model computed a growth rate in its head and got it wrong.
@@ -292,7 +292,7 @@ Failing closed on the first three is deliberate: a wrong scope, an unchecked ans
 
 ## 8. Cost controls
 
-- **Model**: two to four calls for a typical question; hard limit of eight. Golden examples are retrieved without a model call. The fixed part of the prompt comes first, which suits provider-side prompt caching.
+- **Model**: two to four calls for a typical question; hard limit of ten. Golden examples are retrieved without a model call. The fixed part of the prompt comes first, which suits provider-side prompt caching.
 - **BigQuery**: free dry run before every execution; maximum bytes billed per query; job timeout; results limited to 200 rows, which also pushes the model towards aggregate queries. BigQuery's own result cache makes repeated identical queries free.
 - **Production**: per-user and per-day budgets, project-level BigQuery quotas, a cache of recent question-to-result pairs within the same scope, and cost per turn as a monitored metric.
 

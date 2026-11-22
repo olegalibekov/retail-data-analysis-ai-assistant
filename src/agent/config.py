@@ -46,7 +46,9 @@ class Settings:
     bq_timeout_s: int = _int("BQ_TIMEOUT_S", 60)
     max_queries_per_turn: int = _int("MAX_QUERIES_PER_TURN", 8)  # queries sent to BigQuery, failed ones included
     max_sql_failures: int = _int("MAX_SQL_FAILURES_PER_TURN", 3)
-    max_model_calls: int = _int("MAX_MODEL_CALLS_PER_TURN", 8)
+    # A report needs about eight steps (queries, one round to repair unsupported figures, the save and
+    # the closing answer), so ten leaves room without letting a turn run on.
+    max_model_calls: int = _int("MAX_MODEL_CALLS_PER_TURN", 10)
     llm_retries: int = _int("LLM_RETRIES", 2)  # per model, before falling back
     llm_max_wait_s: int = _int("LLM_MAX_WAIT_S", 20)  # longest single backoff we accept
     llm_timeout_s: int = _int("LLM_TIMEOUT_S", 60)

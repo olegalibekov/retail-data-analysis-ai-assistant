@@ -223,7 +223,7 @@ All settings are environment variables (see [.env.example](.env.example)):
 | `GEMINI_FALLBACK_MODEL` | `gemini-3.1-flash-lite` | Used when the primary model fails, times out or is rate limited |
 | `BQ_MAX_BYTES_BILLED` | 1 GB | Hard cost cap per query |
 | `MAX_SQL_FAILURES_PER_TURN` | 3 | SQL repair attempts per question |
-| `MAX_MODEL_CALLS_PER_TURN` | 8 | Model calls per question; the last one must answer |
+| `MAX_MODEL_CALLS_PER_TURN` | 10 | Model calls per question; the last one must answer |
 | `LANGSMITH_TRACING`, `LANGSMITH_API_KEY` | off | Optional: also send traces to LangSmith |
 
 Files that can be edited without touching code:
